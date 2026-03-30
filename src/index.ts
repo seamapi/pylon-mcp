@@ -1163,14 +1163,23 @@ server.tool(
 			.array(z.string())
 			.optional()
 			.describe('Array of attachment URLs to attach to this issue'),
+		email_info: z
+			.object({
+				to_emails: z.array(z.string()).optional().describe('Recipient email addresses'),
+				cc_emails: z.array(z.string()).optional().describe('CC email addresses'),
+				bcc_emails: z.array(z.string()).optional().describe('BCC email addresses'),
+			})
+			.optional()
+			.describe('Email routing options for the reply'),
 	},
-	async ({ id, body_html, message_id, contact_id, user_id, attachment_urls }) => {
+	async ({ id, body_html, message_id, contact_id, user_id, attachment_urls, email_info }) => {
 		const result = await client.replyToIssue(id, {
 			body_html,
 			message_id,
 			contact_id,
 			user_id,
 			attachment_urls,
+			email_info,
 		});
 		return {
 			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],

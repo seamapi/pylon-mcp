@@ -637,7 +637,7 @@ export class PylonClient {
 				external_id?: string;
 				metadata?: Record<string, unknown>;
 			};
-			email_info?: Record<string, unknown>;
+			email_info?: { to_emails?: string[]; cc_emails?: string[]; bcc_emails?: string[] };
 		},
 	): Promise<SingleResponse<{ id: string; issue_id: string }>> {
 		return this.request<SingleResponse<{ id: string; issue_id: string }>>(
