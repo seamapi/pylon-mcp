@@ -294,6 +294,49 @@ server.tool(
 );
 
 server.tool(
+	'pylon_update_multiple_accounts',
+	'Update multiple accounts at once (1-100). Can set owner, tags, and custom fields in bulk.',
+	{
+		account_ids: z
+			.array(z.string())
+			.min(1)
+			.max(100)
+			.describe('The account IDs to update (1-100)'),
+		owner_id: z
+			.string()
+			.optional()
+			.describe('New owner ID. Pass empty string to remove the owner'),
+		tags: z.array(z.string()).optional().describe('Tags to update on the accounts'),
+		tags_apply_mode: z
+			.enum(['append_only', 'remove_only', 'replace'])
+			.optional()
+			.describe('How to apply tags: append_only, remove_only, or replace (default: replace)'),
+		custom_fields: z
+			.array(
+				z.object({
+					slug: z.string().describe('The custom field identifier'),
+					value: z.string().optional().describe('Value for single-valued fields. Unset to remove'),
+					values: z.array(z.string()).optional().describe('Values for multi-valued fields like multiselect'),
+				}),
+			)
+			.optional()
+			.describe('Custom fields to update'),
+	},
+	async ({ account_ids, owner_id, tags, tags_apply_mode, custom_fields }) => {
+		const result = await client.updateMultipleAccounts({
+			account_ids,
+			owner_id,
+			tags,
+			tags_apply_mode,
+			custom_fields,
+		});
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+		};
+	},
+);
+
+server.tool(
 	'pylon_delete_account',
 	'Delete an account',
 	{
@@ -730,6 +773,21 @@ server.tool(
 			.boolean()
 			.optional()
 			.describe('Whether visible in customer portal'),
+		requester_id: z.string().optional().describe('ID of the requester this issue is on behalf of'),
+		type: z
+			.enum(['conversation', 'ticket'])
+			.optional()
+			.describe('Set to "ticket" to upgrade a conversation to a support ticket (cannot be downgraded)'),
+		custom_fields: z
+			.array(
+				z.object({
+					slug: z.string().describe('The custom field identifier'),
+					value: z.string().optional().describe('Value for single-valued fields'),
+					values: z.array(z.string()).optional().describe('Values for multi-valued fields'),
+				}),
+			)
+			.optional()
+			.describe('Custom fields to update. Only passed-in fields will be modified'),
 	},
 	async ({ id, ...data }) => {
 		const result = await client.updateIssue(id, data);
@@ -1002,8 +1060,160 @@ server.tool(
 );
 
 // ============================================================================
+// Thread Tools
+// ============================================================================
+
+server.tool(
+	'pylon_get_issue_threads',
+	'Get all internal threads on an issue',
+	{
+		id: z.string().describe('The issue ID'),
+		limit: z
+			.number()
+			.min(1)
+			.max(MAX_LIST_LIMIT)
+			.optional()
+			.describe(`Number of threads to return (1-${MAX_LIST_LIMIT}, default ${DEFAULT_LIST_LIMIT})`),
+		cursor: z.string().optional().describe('Pagination cursor for next page'),
+	},
+	async ({ id, limit, cursor }) => {
+		const result = await client.getIssueThreads(id, {
+			limit: limit ?? DEFAULT_LIST_LIMIT,
+			cursor,
+		});
+
+		const pagination = result.pagination?.has_next_page
+			? `\n\nMore results available. Use cursor: "${result.pagination.cursor}"`
+			: '';
+
+		return {
+			content: [
+				{ type: 'text', text: JSON.stringify(result.data, null, 2) + pagination },
+			],
+		};
+	},
+);
+
+server.tool(
+	'pylon_create_issue_thread',
+	'Create a new internal thread on an issue for internal discussions not visible to the customer',
+	{
+		id: z.string().describe('The issue ID to create a thread for'),
+		name: z.string().optional().describe('The name of the thread'),
+	},
+	async ({ id, name }) => {
+		const result = await client.createIssueThread(id, name ? { name } : undefined);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+// ============================================================================
 // Message Tools
 // ============================================================================
+
+server.tool(
+	'pylon_get_issue_messages',
+	'Get all messages on an issue',
+	{
+		id: z.string().describe('The issue ID'),
+		limit: z
+			.number()
+			.min(1)
+			.max(MAX_LIST_LIMIT)
+			.optional()
+			.describe(`Number of messages to return (1-${MAX_LIST_LIMIT}, default ${DEFAULT_LIST_LIMIT})`),
+		cursor: z.string().optional().describe('Pagination cursor for next page'),
+	},
+	async ({ id, limit, cursor }) => {
+		const result = await client.getIssueMessages(id, {
+			limit: limit ?? DEFAULT_LIST_LIMIT,
+			cursor,
+		});
+
+		const pagination = result.pagination?.has_next_page
+			? `\n\nMore results available. Use cursor: "${result.pagination.cursor}"`
+			: '';
+
+		return {
+			content: [
+				{ type: 'text', text: JSON.stringify(result.data, null, 2) + pagination },
+			],
+		};
+	},
+);
+
+server.tool(
+	'pylon_reply_to_issue',
+	'Send a customer-facing reply on an issue, visible to the requester',
+	{
+		id: z.string().describe('The issue ID'),
+		body_html: z.string().describe('The body of the message in HTML'),
+		message_id: z.string().describe('The message ID to reply to'),
+		contact_id: z
+			.string()
+			.optional()
+			.describe('Contact ID to post the message as. Only one of user_id or contact_id can be provided'),
+		user_id: z
+			.string()
+			.optional()
+			.describe('User ID to post the message as. If not provided, the API token user will be used'),
+		attachment_urls: z
+			.array(z.string())
+			.optional()
+			.describe('Array of attachment URLs to attach to this issue'),
+	},
+	async ({ id, body_html, message_id, contact_id, user_id, attachment_urls }) => {
+		const result = await client.replyToIssue(id, {
+			body_html,
+			message_id,
+			contact_id,
+			user_id,
+			attachment_urls,
+		});
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_create_internal_note',
+	'Post an internal note on an issue thread. Not visible to the requester',
+	{
+		id: z.string().describe('The issue ID'),
+		body_html: z.string().describe('The body of the note in HTML'),
+		thread_id: z
+			.string()
+			.optional()
+			.describe('The thread ID to post the note to (use the id field from GET /issues/{id}/threads). Either this or message_id must be provided'),
+		message_id: z
+			.string()
+			.optional()
+			.describe('The message ID to reply to (must be an internal note). Either this or thread_id must be provided'),
+		user_id: z
+			.string()
+			.optional()
+			.describe('User ID to post the note as. If not provided, the API token user will be used'),
+		attachment_urls: z
+			.array(z.string())
+			.optional()
+			.describe('Array of attachment URLs to attach'),
+	},
+	async ({ id, body_html, thread_id, message_id, user_id, attachment_urls }) => {
+		const result = await client.createInternalNote(id, {
+			body_html,
+			thread_id,
+			message_id,
+			user_id,
+			attachment_urls,
+		});
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
 
 server.tool(
 	'pylon_redact_message',
@@ -1016,6 +1226,21 @@ server.tool(
 		const result = await client.redactMessage(issue_id, message_id);
 		return {
 			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_delete_message',
+	'Delete a message from an issue',
+	{
+		issue_id: z.string().describe('The issue ID'),
+		message_id: z.string().describe('The message ID to delete'),
+	},
+	async ({ issue_id, message_id }) => {
+		const result = await client.deleteMessage(issue_id, message_id);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
 		};
 	},
 );
@@ -1212,6 +1437,178 @@ server.tool(
 		return {
 			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
 		};
+	},
+);
+
+// ============================================================================
+// Knowledge Bases
+// ============================================================================
+
+server.tool(
+	'pylon_list_knowledge_bases',
+	'List all knowledge bases.',
+	{
+		limit: z.number().optional().describe('Number of results per page'),
+		cursor: z.string().optional().describe('Pagination cursor'),
+	},
+	async ({ limit, cursor }) => {
+		const result = await client.listKnowledgeBases({ limit, cursor });
+		const rows = result.data.map((kb) => `| ${kb.id} | ${kb.title} | ${kb.slug} | ${kb.default_language} |`);
+		const table = [
+			'| ID | Title | Slug | Default Language |',
+			'|----|-------|------|------------------|',
+			...rows,
+		].join('\n');
+		return { content: [{ type: 'text', text: table }] };
+	},
+);
+
+server.tool(
+	'pylon_get_knowledge_base',
+	'Get a knowledge base by its ID.',
+	{ id: z.string().describe('The knowledge base ID') },
+	async ({ id }) => {
+		const result = await client.getKnowledgeBase(id);
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_list_kb_collections',
+	'List all collections in a knowledge base.',
+	{ knowledge_base_id: z.string().describe('The knowledge base ID') },
+	async ({ knowledge_base_id }) => {
+		const result = await client.listKbCollections(knowledge_base_id);
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_create_kb_collection',
+	'Create a collection in a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		name: z.string().describe('Collection name'),
+		slug: z.string().optional().describe('URL-friendly identifier'),
+	},
+	async ({ knowledge_base_id, name, slug }) => {
+		const result = await client.createKbCollection(knowledge_base_id, { name, slug });
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_delete_kb_collection',
+	'Delete a collection from a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		collection_id: z.string().describe('The collection ID to delete'),
+	},
+	async ({ knowledge_base_id, collection_id }) => {
+		const result = await client.deleteKbCollection(knowledge_base_id, collection_id);
+		return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_list_kb_articles',
+	'List all articles in a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		limit: z.number().optional().describe('Number of results (1-1000, default 100)'),
+		cursor: z.string().optional().describe('Pagination cursor'),
+		language: z.string().optional().describe('Language code (defaults to KB default language)'),
+	},
+	async ({ knowledge_base_id, limit, cursor, language }) => {
+		const result = await client.listKbArticles(knowledge_base_id, { limit, cursor, language });
+		const rows = result.data.map(
+			(a) => `| ${a.id} | ${truncate(a.title, MAX_TITLE_LENGTH)} | ${a.slug} | ${a.is_published ? 'Yes' : 'No'} |`,
+		);
+		const table = [
+			'| ID | Title | Slug | Published |',
+			'|----|-------|------|-----------|',
+			...rows,
+		].join('\n');
+		return { content: [{ type: 'text', text: table }] };
+	},
+);
+
+server.tool(
+	'pylon_create_kb_article',
+	'Create an article in a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		title: z.string().describe('Article title'),
+		body_html: z.string().describe('Article content as HTML'),
+		author_user_id: z.string().describe('User ID of the author'),
+		collection_id: z.string().optional().describe('Collection to place the article in'),
+		slug: z.string().optional().describe('URL-friendly identifier'),
+		is_published: z.boolean().optional().describe('Whether to publish immediately (default: false)'),
+		is_unlisted: z.boolean().optional().describe('Whether the article is unlisted (default: false)'),
+	},
+	async ({ knowledge_base_id, ...data }) => {
+		const result = await client.createKbArticle(knowledge_base_id, data);
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_get_kb_article',
+	'Get an article by its ID.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		article_id: z.string().describe('The article ID'),
+		language: z.string().optional().describe('Language code'),
+	},
+	async ({ knowledge_base_id, article_id, language }) => {
+		const result = await client.getKbArticle(knowledge_base_id, article_id, language);
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_update_kb_article',
+	'Update an existing article in a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		article_id: z.string().describe('The article ID to update'),
+		title: z.string().optional().describe('New title'),
+		body_html: z.string().optional().describe('New content as HTML'),
+		collection_id: z.string().optional().describe('New collection ID'),
+		slug: z.string().optional().describe('New slug'),
+		is_published: z.boolean().optional().describe('Published state'),
+		is_unlisted: z.boolean().optional().describe('Unlisted state'),
+	},
+	async ({ knowledge_base_id, article_id, ...data }) => {
+		const result = await client.updateKbArticle(knowledge_base_id, article_id, data);
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_delete_kb_article',
+	'Delete an article from a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		article_id: z.string().describe('The article ID to delete'),
+	},
+	async ({ knowledge_base_id, article_id }) => {
+		const result = await client.deleteKbArticle(knowledge_base_id, article_id);
+		return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+	},
+);
+
+server.tool(
+	'pylon_create_kb_route_redirect',
+	'Create a route redirect in a knowledge base.',
+	{
+		knowledge_base_id: z.string().describe('The knowledge base ID'),
+		from_path: z.string().describe('The path to redirect from'),
+		to_path: z.string().describe('The path to redirect to'),
+	},
+	async ({ knowledge_base_id, from_path, to_path }) => {
+		const result = await client.createKbRouteRedirect(knowledge_base_id, { from_path, to_path });
+		return { content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }] };
 	},
 );
 

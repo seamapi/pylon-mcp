@@ -223,6 +223,15 @@ export interface Issue {
 	issue_type?: string;
 }
 
+export interface IssueThread {
+	id: string;
+	channel_id?: string;
+	issue_id: string;
+	name?: string;
+	source?: string;
+	thread_id?: string;
+}
+
 export interface Message {
 	id: string;
 	message_html: string;
@@ -262,6 +271,34 @@ export interface User {
 	id: string;
 	email: string;
 	name?: string;
+}
+
+export interface KnowledgeBase {
+	id: string;
+	title: string;
+	slug: string;
+	default_language: string;
+	supported_languages: string[];
+}
+
+export interface KbCollection {
+	id: string;
+	knowledge_base_id: string;
+	name: string;
+	slug?: string;
+}
+
+export interface KbArticle {
+	id: string;
+	title: string;
+	slug: string;
+	identifier: string;
+	collection_id?: string;
+	is_published: boolean;
+	url: string;
+	current_draft_content_html?: string;
+	current_published_content_html?: string;
+	last_published_at?: string;
 }
 
 export class PylonClient {
@@ -335,6 +372,20 @@ export class PylonClient {
 		return this.request<SingleResponse<Account>>(
 			'PATCH',
 			`/accounts/${id}`,
+			data,
+		);
+	}
+
+	async updateMultipleAccounts(data: {
+		account_ids: string[];
+		owner_id?: string;
+		tags?: string[];
+		tags_apply_mode?: 'append_only' | 'remove_only' | 'replace';
+		custom_fields?: { slug: string; value?: string; values?: string[] }[];
+	}): Promise<SingleResponse<{ success: boolean }>> {
+		return this.request<SingleResponse<{ success: boolean }>>(
+			'PATCH',
+			'/accounts',
 			data,
 		);
 	}
@@ -474,6 +525,9 @@ export class PylonClient {
 			account_id?: string;
 			customer_portal_visible?: boolean;
 			priority?: 'urgent' | 'high' | 'medium' | 'low';
+			requester_id?: string;
+			type?: 'conversation' | 'ticket';
+			custom_fields?: { slug: string; value?: string; values?: string[] }[];
 		},
 	): Promise<SingleResponse<Issue>> {
 		return this.request<SingleResponse<Issue>>('PATCH', `/issues/${id}`, data);
@@ -543,7 +597,98 @@ export class PylonClient {
 		);
 	}
 
+	// Threads
+	async getIssueThreads(
+		issueId: string,
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<IssueThread>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<IssueThread>>(
+			'GET',
+			`/issues/${issueId}/threads${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async createIssueThread(
+		issueId: string,
+		data?: { name?: string },
+	): Promise<SingleResponse<IssueThread>> {
+		return this.request<SingleResponse<IssueThread>>(
+			'POST',
+			`/issues/${issueId}/threads`,
+			data ?? {},
+		);
+	}
+
+	// Reply & Notes
+	async replyToIssue(
+		issueId: string,
+		data: {
+			body_html: string;
+			message_id: string;
+			contact_id?: string;
+			user_id?: string;
+			attachment_urls?: string[];
+			custom_source?: {
+				created_at?: string;
+				external_id?: string;
+				metadata?: Record<string, unknown>;
+			};
+			email_info?: Record<string, unknown>;
+		},
+	): Promise<SingleResponse<{ id: string; issue_id: string }>> {
+		return this.request<SingleResponse<{ id: string; issue_id: string }>>(
+			'POST',
+			`/issues/${issueId}/reply`,
+			data,
+		);
+	}
+
+	async createInternalNote(
+		issueId: string,
+		data: {
+			body_html: string;
+			thread_id?: string;
+			message_id?: string;
+			user_id?: string;
+			attachment_urls?: string[];
+		},
+	): Promise<SingleResponse<{ id: string; issue_id: string }>> {
+		return this.request<SingleResponse<{ id: string; issue_id: string }>>(
+			'POST',
+			`/issues/${issueId}/note`,
+			data,
+		);
+	}
+
 	// Messages
+	async getIssueMessages(
+		issueId: string,
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<Message>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<Message>>(
+			'GET',
+			`/issues/${issueId}/messages${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async deleteMessage(
+		issueId: string,
+		messageId: string,
+	): Promise<SingleResponse<{ success: boolean }>> {
+		return this.request<SingleResponse<{ success: boolean }>>(
+			'DELETE',
+			`/issues/${issueId}/messages/${messageId}`,
+		);
+	}
+
 	async redactMessage(
 		issueId: string,
 		messageId: string,
@@ -620,5 +765,98 @@ export class PylonClient {
 		data: { name?: string; user_ids?: string[] },
 	): Promise<SingleResponse<Team>> {
 		return this.request<SingleResponse<Team>>('PATCH', `/teams/${id}`, data);
+	}
+
+	// Knowledge Bases
+	async listKnowledgeBases(params?: PaginationParams): Promise<PaginatedResponse<KnowledgeBase>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<KnowledgeBase>>(
+			'GET',
+			`/knowledge-bases${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async getKnowledgeBase(id: string): Promise<SingleResponse<KnowledgeBase>> {
+		return this.request<SingleResponse<KnowledgeBase>>('GET', `/knowledge-bases/${id}`);
+	}
+
+	async listKbCollections(kbId: string): Promise<PaginatedResponse<KbCollection>> {
+		return this.request<PaginatedResponse<KbCollection>>('GET', `/knowledge-bases/${kbId}/collections`);
+	}
+
+	async createKbCollection(kbId: string, data: { name: string; slug?: string }): Promise<SingleResponse<KbCollection>> {
+		return this.request<SingleResponse<KbCollection>>('POST', `/knowledge-bases/${kbId}/collections`, data);
+	}
+
+	async deleteKbCollection(kbId: string, collectionId: string): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>('DELETE', `/knowledge-bases/${kbId}/collections/${collectionId}`);
+	}
+
+	async listKbArticles(
+		kbId: string,
+		params?: PaginationParams & { language?: string },
+	): Promise<PaginatedResponse<KbArticle>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		if (params?.language) searchParams.set('language', params.language);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<KbArticle>>(
+			'GET',
+			`/knowledge-bases/${kbId}/articles${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async createKbArticle(
+		kbId: string,
+		data: {
+			title: string;
+			body_html: string;
+			author_user_id: string;
+			collection_id?: string;
+			slug?: string;
+			is_published?: boolean;
+			is_unlisted?: boolean;
+		},
+	): Promise<SingleResponse<KbArticle>> {
+		return this.request<SingleResponse<KbArticle>>('POST', `/knowledge-bases/${kbId}/articles`, data);
+	}
+
+	async getKbArticle(kbId: string, articleId: string, language?: string): Promise<SingleResponse<KbArticle>> {
+		const query = language ? `?language=${encodeURIComponent(language)}` : '';
+		return this.request<SingleResponse<KbArticle>>('GET', `/knowledge-bases/${kbId}/articles/${articleId}${query}`);
+	}
+
+	async updateKbArticle(
+		kbId: string,
+		articleId: string,
+		data: {
+			title?: string;
+			body_html?: string;
+			collection_id?: string;
+			slug?: string;
+			is_published?: boolean;
+			is_unlisted?: boolean;
+		},
+	): Promise<SingleResponse<KbArticle>> {
+		return this.request<SingleResponse<KbArticle>>('PATCH', `/knowledge-bases/${kbId}/articles/${articleId}`, data);
+	}
+
+	async deleteKbArticle(kbId: string, articleId: string): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>('DELETE', `/knowledge-bases/${kbId}/articles/${articleId}`);
+	}
+
+	async createKbRouteRedirect(
+		kbId: string,
+		data: { from_path: string; to_path: string },
+	): Promise<SingleResponse<{ id: string; from_path: string; to_path: string }>> {
+		return this.request<SingleResponse<{ id: string; from_path: string; to_path: string }>>(
+			'POST',
+			`/knowledge-bases/${kbId}/route-redirects`,
+			data,
+		);
 	}
 }

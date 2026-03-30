@@ -1,2 +1,5 @@
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+nvm use 24 --silent 2>/dev/null || nvm use 22 --silent
 npm run validate:mcp
 npm test
