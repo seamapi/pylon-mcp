@@ -71,29 +71,66 @@ export type IssueFull = z.infer<typeof IssueFullSchema>;
 // Account Schemas
 // ============================================================================
 
-export const AccountMinimalSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  primary_domain: z.string().nullable().optional(),
-  owner_id: z.string().nullable().optional(),
-  tags: z.array(z.string()).nullable().optional(),
-});
-
 export const CustomFieldValueSchema = z.object({
   slug: z.string(),
   value: z.unknown().nullable().optional(),
   values: z.array(z.unknown()).nullable().optional(),
 });
 
-export const AccountStandardSchema = AccountMinimalSchema.extend({
-  domains: z.array(z.string()).nullable().optional(),
-  created_at: z.string().optional(),
-  type: z.string().optional(),
-  custom_fields: z.array(CustomFieldValueSchema).nullable().optional(),
+const ChannelSchema = z.object({
+  channel_id: z.string(),
+  source: z.string().optional(),
+  is_primary: z.boolean().optional(),
+  is_internal: z.boolean().optional(),
+  mirror_to: z
+    .object({
+      channel_id: z.string(),
+      source: z.string(),
+    })
+    .nullable()
+    .optional(),
 });
 
-export type AccountMinimal = z.infer<typeof AccountMinimalSchema>;
-export type AccountStandard = z.infer<typeof AccountStandardSchema>;
+const ExternalIdSchema = z.object({
+  external_id: z.string(),
+  label: z.string().optional(),
+});
+
+export const AccountSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string().nullable().optional(),
+  domain: z.string().nullable().optional(),
+  domains: z.array(z.string()).nullable().optional(),
+  primary_domain: z.string().nullable().optional(),
+  owner: z
+    .object({ id: z.string(), email: z.string().optional() })
+    .nullable()
+    .optional(),
+  tags: z.array(z.string()).nullable().optional(),
+  custom_fields: z
+    .record(z.string(), CustomFieldValueSchema)
+    .nullable()
+    .optional(),
+  channels: z.array(ChannelSchema).nullable().optional(),
+  external_ids: z.array(ExternalIdSchema).nullable().optional(),
+  crm_settings: z
+    .object({
+      details: z
+        .array(z.object({ id: z.string(), source: z.string() }))
+        .optional(),
+    })
+    .nullable()
+    .optional(),
+  is_disabled: z.boolean().nullable().optional(),
+  logo_url: z.string().nullable().optional(),
+  subaccount_ids: z.array(z.string()).nullable().optional(),
+  latest_customer_activity_time: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+});
+
+export type Account = z.infer<typeof AccountSchema>;
 
 // ============================================================================
 // Contact Schemas
@@ -284,35 +321,10 @@ export function toIssueFull(raw: Record<string, unknown>): IssueFull {
 }
 
 /**
- * Transform raw account to minimal format.
+ * Transform raw account response to typed format.
  */
-export function toAccountMinimal(raw: Record<string, unknown>): AccountMinimal {
-  const owner = raw["owner"] as { id?: string } | null | undefined;
-  return {
-    id: raw["id"] as string,
-    name: raw["name"] as string,
-    primary_domain: raw["primary_domain"] as string | null | undefined,
-    owner_id: owner?.id ?? (raw["owner_id"] as string | null | undefined),
-    tags: raw["tags"] as string[] | null | undefined,
-  };
-}
-
-/**
- * Transform raw account to standard format.
- */
-export function toAccountStandard(
-  raw: Record<string, unknown>
-): AccountStandard {
-  return {
-    ...toAccountMinimal(raw),
-    domains: raw["domains"] as string[] | null | undefined,
-    created_at: raw["created_at"] as string | undefined,
-    type: raw["type"] as string | undefined,
-    custom_fields: raw["custom_fields"] as
-      | { slug: string; value?: unknown; values?: unknown[] }[]
-      | null
-      | undefined,
-  };
+export function toAccount(raw: Record<string, unknown>): Account {
+  return AccountSchema.strip().parse(raw);
 }
 
 /**

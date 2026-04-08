@@ -15,6 +15,7 @@ pnpm run build
 ## Configuration
 
 1. Copy the example environment file:
+
    ```bash
    cp .env.example .env
    ```
@@ -37,7 +38,11 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
   "mcpServers": {
     "pylon": {
       "command": "node",
-      "args": ["--env-file", "/path/to/pylon-mcp/.env", "/path/to/pylon-mcp/dist/index.js"]
+      "args": [
+        "--env-file",
+        "/path/to/pylon-mcp/.env",
+        "/path/to/pylon-mcp/dist/index.js"
+      ]
     }
   }
 }
@@ -52,7 +57,11 @@ Add to your Claude Code MCP settings:
   "mcpServers": {
     "pylon": {
       "command": "node",
-      "args": ["--env-file", "/path/to/pylon-mcp/.env", "/path/to/pylon-mcp/dist/index.js"]
+      "args": [
+        "--env-file",
+        "/path/to/pylon-mcp/.env",
+        "/path/to/pylon-mcp/dist/index.js"
+      ]
     }
   }
 }
@@ -61,17 +70,21 @@ Add to your Claude Code MCP settings:
 ## Available Tools
 
 ### Organization
+
 - `pylon_get_organization` - Get information about your Pylon organization
 
 ### Accounts
+
 - `pylon_list_accounts` - List all accounts with pagination
-- `pylon_get_account` - Get a specific account by ID
-- `pylon_create_account` - Create a new account
-- `pylon_update_account` - Update an existing account
+- `pylon_get_account` - Get a specific account by ID (includes custom fields)
+- `pylon_create_account` - Create a new account (supports custom fields)
+- `pylon_update_account` - Update an existing account (supports custom fields)
+- `pylon_update_multiple_accounts` - Update multiple accounts at once (1-100), with owner, tags, and custom fields
 - `pylon_delete_account` - Delete an account
 - `pylon_search_accounts` - Search accounts with filters
 
 ### Contacts
+
 - `pylon_list_contacts` - List all contacts with pagination
 - `pylon_get_contact` - Get a specific contact by ID
 - `pylon_create_contact` - Create a new contact
@@ -80,20 +93,30 @@ Add to your Claude Code MCP settings:
 - `pylon_search_contacts` - Search contacts with filters
 
 ### Issues
+
 - `pylon_list_issues` - List issues within a time range
 - `pylon_get_issue` - Get a specific issue by ID
+- `pylon_get_issue_body` - Get the full body content of an issue
 - `pylon_create_issue` - Create a new issue/ticket
-- `pylon_update_issue` - Update an existing issue
+- `pylon_update_issue` - Update an existing issue (supports custom fields)
 - `pylon_delete_issue` - Delete an issue
 - `pylon_search_issues` - Search issues with filters
 - `pylon_snooze_issue` - Snooze an issue until a specific time
 - `pylon_get_issue_followers` - Get issue followers
 - `pylon_update_issue_followers` - Add/remove issue followers
+- `pylon_get_issue_threads` - Get all internal threads on an issue
+- `pylon_create_issue_thread` - Create an internal thread on an issue
 
 ### Messages
+
+- `pylon_get_issue_messages` - Get all messages on an issue
+- `pylon_reply_to_issue` - Send a customer-facing reply on an issue
+- `pylon_create_internal_note` - Post an internal note on an issue thread
 - `pylon_redact_message` - Redact a message from an issue
+- `pylon_delete_message` - Delete a message from an issue
 
 ### Tags
+
 - `pylon_list_tags` - List all tags
 - `pylon_get_tag` - Get a specific tag by ID
 - `pylon_create_tag` - Create a new tag
@@ -101,10 +124,25 @@ Add to your Claude Code MCP settings:
 - `pylon_delete_tag` - Delete a tag
 
 ### Teams
+
 - `pylon_list_teams` - List all teams
 - `pylon_get_team` - Get a specific team by ID
 - `pylon_create_team` - Create a new team
 - `pylon_update_team` - Update an existing team
+
+### Knowledge Base
+
+- `pylon_list_knowledge_bases` - List all knowledge bases
+- `pylon_get_knowledge_base` - Get a knowledge base by ID
+- `pylon_list_kb_collections` - List collections in a knowledge base
+- `pylon_create_kb_collection` - Create a collection
+- `pylon_delete_kb_collection` - Delete a collection
+- `pylon_list_kb_articles` - List articles in a knowledge base
+- `pylon_get_kb_article` - Get an article by ID
+- `pylon_create_kb_article` - Create an article
+- `pylon_update_kb_article` - Update an article
+- `pylon_delete_kb_article` - Delete an article
+- `pylon_create_kb_route_redirect` - Create a route redirect
 
 ## Requirements
 
