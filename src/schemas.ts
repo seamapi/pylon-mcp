@@ -136,22 +136,34 @@ export type Account = z.infer<typeof AccountSchema>;
 // Contact Schemas
 // ============================================================================
 
-export const ContactMinimalSchema = z.object({
+const IntegrationUserIdSchema = z.object({
+  integration_id: z.string().optional(),
+  user_id: z.string().optional(),
+});
+
+export const ContactSchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.string().nullable().optional(),
-  account_id: z.string().nullable().optional(),
-  portal_role: z.string().nullable().optional(),
-});
-
-export const ContactStandardSchema = ContactMinimalSchema.extend({
   emails: z.array(z.string()).nullable().optional(),
+  account: z
+    .object({ id: z.string(), name: z.string().optional() })
+    .nullable()
+    .optional(),
   avatar_url: z.string().nullable().optional(),
-  created_at: z.string().optional(),
+  portal_role: z.string().nullable().optional(),
+  portal_role_id: z.string().nullable().optional(),
+  phone_numbers: z.array(z.string()).nullable().optional(),
+  primary_phone_number: z.string().nullable().optional(),
+  custom_fields: z
+    .record(z.string(), CustomFieldValueSchema)
+    .nullable()
+    .optional(),
+  external_ids: z.array(ExternalIdSchema).nullable().optional(),
+  integration_user_ids: z.array(IntegrationUserIdSchema).nullable().optional(),
 });
 
-export type ContactMinimal = z.infer<typeof ContactMinimalSchema>;
-export type ContactStandard = z.infer<typeof ContactStandardSchema>;
+export type Contact = z.infer<typeof ContactSchema>;
 
 // ============================================================================
 // Tag Schema
@@ -328,31 +340,10 @@ export function toAccount(raw: Record<string, unknown>): Account {
 }
 
 /**
- * Transform raw contact to minimal format.
+ * Transform raw contact response to typed format.
  */
-export function toContactMinimal(raw: Record<string, unknown>): ContactMinimal {
-  const account = raw["account"] as { id?: string } | null | undefined;
-  return {
-    id: raw["id"] as string,
-    name: raw["name"] as string,
-    email: raw["email"] as string | null | undefined,
-    account_id: account?.id ?? (raw["account_id"] as string | null | undefined),
-    portal_role: raw["portal_role"] as string | null | undefined,
-  };
-}
-
-/**
- * Transform raw contact to standard format.
- */
-export function toContactStandard(
-  raw: Record<string, unknown>
-): ContactStandard {
-  return {
-    ...toContactMinimal(raw),
-    emails: raw["emails"] as string[] | null | undefined,
-    avatar_url: raw["avatar_url"] as string | null | undefined,
-    created_at: raw["created_at"] as string | undefined,
-  };
+export function toContact(raw: Record<string, unknown>): Contact {
+  return ContactSchema.strip().parse(raw);
 }
 
 /**
