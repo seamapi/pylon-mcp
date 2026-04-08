@@ -9,10 +9,9 @@ import {
   toIssueStandard,
   toIssueFull,
   toAccount,
-  toContactMinimal,
+  toContact,
   toTeamMinimal,
   type IssueMinimal,
-  type ContactMinimal,
 } from "./schemas.js";
 
 const PYLON_API_TOKEN = process.env["PYLON_API_TOKEN"];
@@ -74,25 +73,6 @@ function formatIssuesAsTable(issues: IssueMinimal[]): string {
 /**
  * Formats contacts as a markdown table for compact, token-efficient output.
  */
-function formatContactsAsTable(contacts: ContactMinimal[]): string {
-  if (contacts.length === 0) {
-    return "No contacts found.";
-  }
-
-  const headers = ["ID", "Name", "Email", "Account ID"];
-  const rows = contacts.map((contact) => [
-    escapeCell(contact.id),
-    escapeCell(truncate(contact.name, MAX_NAME_LENGTH)),
-    escapeCell(contact.email || "-"),
-    escapeCell(contact.account_id || "-"),
-  ]);
-
-  const headerRow = `| ${headers.join(" | ")} |`;
-  const separatorRow = `|${headers.map(() => "---").join("|")}|`;
-  const dataRows = rows.map((row) => `| ${row.join(" | ")} |`).join("\n");
-
-  return `${headerRow}\n${separatorRow}\n${dataRows}`;
-}
 
 /**
  * Formats tags as a markdown table for compact, token-efficient output.
@@ -553,18 +533,19 @@ server.tool(
       cursor,
     });
 
-    // Transform to minimal format to reduce context size
     const contacts = result.data.map((raw) =>
-      toContactMinimal(raw as unknown as Record<string, unknown>)
+      toContact(raw as unknown as Record<string, unknown>)
     );
 
-    const table = formatContactsAsTable(contacts);
-    const pagination = result.pagination.has_next_page
-      ? `\n\nMore results available. Use cursor: "${result.pagination.cursor}"`
-      : "";
+    const response = {
+      data: contacts,
+      ...(result.pagination.has_next_page
+        ? { next_cursor: result.pagination.cursor }
+        : {}),
+    };
 
     return {
-      content: [{ type: "text", text: table + pagination }],
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
     };
   }
 );
@@ -577,8 +558,7 @@ server.tool(
   },
   async ({ id }) => {
     const result = await client.getContact(id);
-    // Return minimal fields to reduce context size
-    const contact = toContactMinimal(
+    const contact = toContact(
       result.data as unknown as Record<string, unknown>
     );
     return {
@@ -593,6 +573,10 @@ server.tool(
   {
     name: z.string().describe("The name of the contact"),
     email: z.string().optional().describe("Email address of the contact"),
+    emails: z
+      .array(z.string())
+      .optional()
+      .describe("Additional email addresses"),
     account_id: z
       .string()
       .optional()
@@ -602,6 +586,37 @@ server.tool(
       .enum(["no_access", "member", "admin"])
       .optional()
       .describe("Portal access role"),
+    portal_role_id: z.string().optional().describe("Portal role ID"),
+    phone_numbers: z.array(z.string()).optional().describe("Phone numbers"),
+    primary_phone_number: z
+      .string()
+      .optional()
+      .describe("Primary phone number"),
+    external_ids: z
+      .array(
+        z.object({
+          external_id: z.string().describe("The external ID"),
+          label: z.string().optional().describe("Label for the external ID"),
+        })
+      )
+      .optional()
+      .describe("External IDs to associate with the contact"),
+    custom_fields: z
+      .array(
+        z.object({
+          slug: z.string().describe("The custom field identifier"),
+          value: z
+            .string()
+            .optional()
+            .describe("Value for single-valued fields"),
+          values: z
+            .array(z.string())
+            .optional()
+            .describe("Values for multi-valued fields"),
+        })
+      )
+      .optional()
+      .describe("Custom fields to set on the contact"),
   },
   async (params) => {
     const result = await client.createContact(params);
@@ -618,12 +633,49 @@ server.tool(
     id: z.string().describe("The contact ID"),
     name: z.string().optional().describe("Updated name"),
     email: z.string().optional().describe("Updated email"),
+    emails: z.array(z.string()).optional().describe("Updated email addresses"),
     account_id: z.string().optional().describe("Updated account association"),
     avatar_url: z.string().optional().describe("Updated avatar URL"),
     portal_role: z
       .enum(["no_access", "member", "admin"])
       .optional()
       .describe("Updated portal role"),
+    portal_role_id: z.string().optional().describe("Updated portal role ID"),
+    phone_numbers: z
+      .array(z.string())
+      .optional()
+      .describe("Updated phone numbers"),
+    primary_phone_number: z
+      .string()
+      .optional()
+      .describe("Updated primary phone number"),
+    external_ids: z
+      .array(
+        z.object({
+          external_id: z.string().describe("The external ID"),
+          label: z.string().optional().describe("Label for the external ID"),
+        })
+      )
+      .optional()
+      .describe("Updated external IDs"),
+    custom_fields: z
+      .array(
+        z.object({
+          slug: z.string().describe("The custom field identifier"),
+          value: z
+            .string()
+            .optional()
+            .describe("Value for single-valued fields"),
+          values: z
+            .array(z.string())
+            .optional()
+            .describe("Values for multi-valued fields"),
+        })
+      )
+      .optional()
+      .describe(
+        "Custom fields to update. Only passed-in fields will be modified"
+      ),
   },
   async ({ id, ...data }) => {
     const result = await client.updateContact(id, data);
@@ -700,18 +752,19 @@ server.tool(
       cursor,
     });
 
-    // Transform to minimal format to reduce context size
     const contacts = (result.data || []).map((raw) =>
-      toContactMinimal(raw as unknown as Record<string, unknown>)
+      toContact(raw as unknown as Record<string, unknown>)
     );
 
-    const table = formatContactsAsTable(contacts);
-    const pagination = result.pagination?.has_next_page
-      ? `\n\nMore results available. Use cursor: "${result.pagination.cursor}"`
-      : "";
+    const response = {
+      data: contacts,
+      ...(result.pagination?.has_next_page
+        ? { next_cursor: result.pagination.cursor }
+        : {}),
+    };
 
     return {
-      content: [{ type: "text", text: table + pagination }],
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
     };
   }
 );
