@@ -8,12 +8,10 @@ import {
   toIssueMinimal,
   toIssueStandard,
   toIssueFull,
-  toAccountMinimal,
-  toAccountStandard,
+  toAccount,
   toContactMinimal,
   toTeamMinimal,
   type IssueMinimal,
-  type AccountMinimal,
   type ContactMinimal,
 } from "./schemas.js";
 
@@ -64,29 +62,6 @@ function formatIssuesAsTable(issues: IssueMinimal[]): string {
     escapeCell(issue.state),
     escapeCell(issue.created_at?.split("T")[0] || "-"),
     issue.link || "-",
-  ]);
-
-  const headerRow = `| ${headers.join(" | ")} |`;
-  const separatorRow = `|${headers.map(() => "---").join("|")}|`;
-  const dataRows = rows.map((row) => `| ${row.join(" | ")} |`).join("\n");
-
-  return `${headerRow}\n${separatorRow}\n${dataRows}`;
-}
-
-/**
- * Formats accounts as a markdown table for compact, token-efficient output.
- */
-function formatAccountsAsTable(accounts: AccountMinimal[]): string {
-  if (accounts.length === 0) {
-    return "No accounts found.";
-  }
-
-  const headers = ["ID", "Name", "Domain", "Tags"];
-  const rows = accounts.map((account) => [
-    escapeCell(account.id),
-    escapeCell(truncate(account.name, MAX_NAME_LENGTH)),
-    escapeCell(account.primary_domain || "-"),
-    escapeCell((account.tags || []).slice(0, 3).join(", ") || "-"),
   ]);
 
   const headerRow = `| ${headers.join(" | ")} |`;
@@ -217,18 +192,19 @@ server.tool(
       cursor,
     });
 
-    // Transform to minimal format to reduce context size
     const accounts = result.data.map((raw) =>
-      toAccountMinimal(raw as unknown as Record<string, unknown>)
+      toAccount(raw as unknown as Record<string, unknown>)
     );
 
-    const table = formatAccountsAsTable(accounts);
-    const pagination = result.pagination.has_next_page
-      ? `\n\nMore results available. Use cursor: "${result.pagination.cursor}"`
-      : "";
+    const response = {
+      data: accounts,
+      ...(result.pagination.has_next_page
+        ? { next_cursor: result.pagination.cursor }
+        : {}),
+    };
 
     return {
-      content: [{ type: "text", text: table + pagination }],
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
     };
   }
 );
@@ -241,7 +217,7 @@ server.tool(
   },
   async ({ id }) => {
     const result = await client.getAccount(id);
-    const account = toAccountStandard(
+    const account = toAccount(
       result.data as unknown as Record<string, unknown>
     );
     return {
@@ -255,6 +231,8 @@ server.tool(
   "Create a new account in Pylon",
   {
     name: z.string().describe("The name of the account"),
+    account_type: z.string().optional().describe("Account type"),
+    domain: z.string().optional().describe("Single domain for the account"),
     domains: z
       .array(z.string())
       .optional()
@@ -266,6 +244,43 @@ server.tool(
       .array(z.string())
       .optional()
       .describe("Tags to apply to the account"),
+    subaccount_ids: z
+      .array(z.string())
+      .optional()
+      .describe("IDs of subaccounts"),
+    external_ids: z
+      .array(
+        z.object({
+          external_id: z.string().describe("The external ID"),
+          label: z.string().optional().describe("Label for the external ID"),
+        })
+      )
+      .optional()
+      .describe("External IDs to associate with the account"),
+    channels: z
+      .array(
+        z.object({
+          channel_id: z.string().describe("The channel ID"),
+          source: z.string().optional().describe("Channel source"),
+          is_primary: z
+            .boolean()
+            .optional()
+            .describe("Whether this is the primary channel"),
+          is_internal: z
+            .boolean()
+            .optional()
+            .describe("Whether this is an internal channel"),
+          mirror_to: z
+            .object({
+              channel_id: z.string(),
+              source: z.string(),
+            })
+            .optional()
+            .describe("Mirror destination"),
+        })
+      )
+      .optional()
+      .describe("Channels to associate with the account"),
     custom_fields: z
       .array(
         z.object({
@@ -302,6 +317,47 @@ server.tool(
     logo_url: z.string().optional().describe("Updated logo URL"),
     owner_id: z.string().optional().describe("Updated owner ID"),
     tags: z.array(z.string()).optional().describe("Updated tags"),
+    is_disabled: z
+      .boolean()
+      .optional()
+      .describe("Whether the account is disabled"),
+    subaccount_ids: z
+      .array(z.string())
+      .optional()
+      .describe("Updated subaccount IDs"),
+    external_ids: z
+      .array(
+        z.object({
+          external_id: z.string().describe("The external ID"),
+          label: z.string().optional().describe("Label for the external ID"),
+        })
+      )
+      .optional()
+      .describe("Updated external IDs"),
+    channels: z
+      .array(
+        z.object({
+          channel_id: z.string().describe("The channel ID"),
+          source: z.string().optional().describe("Channel source"),
+          is_primary: z
+            .boolean()
+            .optional()
+            .describe("Whether this is the primary channel"),
+          is_internal: z
+            .boolean()
+            .optional()
+            .describe("Whether this is an internal channel"),
+          mirror_to: z
+            .object({
+              channel_id: z.string(),
+              source: z.string(),
+            })
+            .optional()
+            .describe("Mirror destination"),
+        })
+      )
+      .optional()
+      .describe("Updated channels"),
     custom_fields: z
       .array(
         z.object({
@@ -456,18 +512,19 @@ server.tool(
       cursor,
     });
 
-    // Transform to minimal format to reduce context size
     const accounts = (result.data || []).map((raw) =>
-      toAccountMinimal(raw as unknown as Record<string, unknown>)
+      toAccount(raw as unknown as Record<string, unknown>)
     );
 
-    const table = formatAccountsAsTable(accounts);
-    const pagination = result.pagination?.has_next_page
-      ? `\n\nMore results available. Use cursor: "${result.pagination.cursor}"`
-      : "";
+    const response = {
+      data: accounts,
+      ...(result.pagination?.has_next_page
+        ? { next_cursor: result.pagination.cursor }
+        : {}),
+    };
 
     return {
-      content: [{ type: "text", text: table + pagination }],
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
     };
   }
 );
