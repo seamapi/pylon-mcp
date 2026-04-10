@@ -13,10 +13,14 @@ function validateTimeRange(startTime: string, endTime: string): void {
 	const end = new Date(endTime);
 
 	if (Number.isNaN(start.getTime())) {
-		throw new Error(`Invalid start_time format: ${startTime}. Use RFC3339 format (e.g., 2024-01-01T00:00:00Z)`);
+		throw new Error(
+			`Invalid start_time format: ${startTime}. Use RFC3339 format (e.g., 2024-01-01T00:00:00Z)`,
+		);
 	}
 	if (Number.isNaN(end.getTime())) {
-		throw new Error(`Invalid end_time format: ${endTime}. Use RFC3339 format (e.g., 2024-01-31T00:00:00Z)`);
+		throw new Error(
+			`Invalid end_time format: ${endTime}. Use RFC3339 format (e.g., 2024-01-31T00:00:00Z)`,
+		);
 	}
 	if (start >= end) {
 		throw new Error('start_time must be before end_time');
@@ -70,7 +74,11 @@ const VALID_OPERATORS: Record<string, Set<string>> = {
 	// Time fields
 	created_at: new Set(['time_is_after', 'time_is_before', 'time_range']),
 	resolved_at: new Set(['time_is_after', 'time_is_before', 'time_range']),
-	latest_message_activity_at: new Set(['time_is_after', 'time_is_before', 'time_range']),
+	latest_message_activity_at: new Set([
+		'time_is_after',
+		'time_is_before',
+		'time_range',
+	]),
 
 	// String search fields (body_html is NOT supported by Pylon API)
 	title: new Set(['string_contains', 'string_does_not_contain']),
@@ -125,7 +133,11 @@ function cleanFilter(
 				// This is a known field - filter to only valid operators
 				const cleanedOperators: Record<string, unknown> = {};
 				for (const [op, opValue] of Object.entries(fieldObj)) {
-					if (validOperators.has(op) && opValue !== undefined && opValue !== null) {
+					if (
+						validOperators.has(op) &&
+						opValue !== undefined &&
+						opValue !== null
+					) {
 						// For time_range, recursively clean but keep structure
 						if (op === 'time_range' && typeof opValue === 'object') {
 							cleanedOperators[op] = opValue;
@@ -549,8 +561,14 @@ export class PylonClient {
 		const cleanedFilter = cleanFilter(filterRecord);
 
 		// Debug: log filters to stderr (shows in Claude Desktop logs)
-		console.error('[pylon-mcp] searchIssues raw:', JSON.stringify(filterRecord));
-		console.error('[pylon-mcp] searchIssues cleaned:', JSON.stringify(cleanedFilter ?? {}));
+		console.error(
+			'[pylon-mcp] searchIssues raw:',
+			JSON.stringify(filterRecord),
+		);
+		console.error(
+			'[pylon-mcp] searchIssues cleaned:',
+			JSON.stringify(cleanedFilter ?? {}),
+		);
 
 		return this.request<PaginatedResponse<Issue>>('POST', '/issues/search', {
 			filter: cleanedFilter ?? {},
@@ -597,6 +615,21 @@ export class PylonClient {
 		);
 	}
 
+	async linkExternalIssue(
+		issueId: string,
+		data: {
+			external_issue_id: string;
+			source: string;
+			operation?: 'link' | 'unlink';
+		},
+	): Promise<SingleResponse<Issue>> {
+		return this.request<SingleResponse<Issue>>(
+			'POST',
+			`/issues/${issueId}/external-issues`,
+			data,
+		);
+	}
+
 	// Threads
 	async getIssueThreads(
 		issueId: string,
@@ -637,7 +670,11 @@ export class PylonClient {
 				external_id?: string;
 				metadata?: Record<string, unknown>;
 			};
-			email_info?: { to_emails?: string[]; cc_emails?: string[]; bcc_emails?: string[] };
+			email_info?: {
+				to_emails?: string[];
+				cc_emails?: string[];
+				bcc_emails?: string[];
+			};
 		},
 	): Promise<SingleResponse<{ id: string; issue_id: string }>> {
 		return this.request<SingleResponse<{ id: string; issue_id: string }>>(
@@ -768,7 +805,9 @@ export class PylonClient {
 	}
 
 	// Knowledge Bases
-	async listKnowledgeBases(params?: PaginationParams): Promise<PaginatedResponse<KnowledgeBase>> {
+	async listKnowledgeBases(
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<KnowledgeBase>> {
 		const searchParams = new URLSearchParams();
 		if (params?.limit) searchParams.set('limit', params.limit.toString());
 		if (params?.cursor) searchParams.set('cursor', params.cursor);
@@ -780,19 +819,40 @@ export class PylonClient {
 	}
 
 	async getKnowledgeBase(id: string): Promise<SingleResponse<KnowledgeBase>> {
-		return this.request<SingleResponse<KnowledgeBase>>('GET', `/knowledge-bases/${id}`);
+		return this.request<SingleResponse<KnowledgeBase>>(
+			'GET',
+			`/knowledge-bases/${id}`,
+		);
 	}
 
-	async listKbCollections(kbId: string): Promise<PaginatedResponse<KbCollection>> {
-		return this.request<PaginatedResponse<KbCollection>>('GET', `/knowledge-bases/${kbId}/collections`);
+	async listKbCollections(
+		kbId: string,
+	): Promise<PaginatedResponse<KbCollection>> {
+		return this.request<PaginatedResponse<KbCollection>>(
+			'GET',
+			`/knowledge-bases/${kbId}/collections`,
+		);
 	}
 
-	async createKbCollection(kbId: string, data: { name: string; slug?: string }): Promise<SingleResponse<KbCollection>> {
-		return this.request<SingleResponse<KbCollection>>('POST', `/knowledge-bases/${kbId}/collections`, data);
+	async createKbCollection(
+		kbId: string,
+		data: { name: string; slug?: string },
+	): Promise<SingleResponse<KbCollection>> {
+		return this.request<SingleResponse<KbCollection>>(
+			'POST',
+			`/knowledge-bases/${kbId}/collections`,
+			data,
+		);
 	}
 
-	async deleteKbCollection(kbId: string, collectionId: string): Promise<{ request_id: string }> {
-		return this.request<{ request_id: string }>('DELETE', `/knowledge-bases/${kbId}/collections/${collectionId}`);
+	async deleteKbCollection(
+		kbId: string,
+		collectionId: string,
+	): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>(
+			'DELETE',
+			`/knowledge-bases/${kbId}/collections/${collectionId}`,
+		);
 	}
 
 	async listKbArticles(
@@ -822,12 +882,23 @@ export class PylonClient {
 			is_unlisted?: boolean;
 		},
 	): Promise<SingleResponse<KbArticle>> {
-		return this.request<SingleResponse<KbArticle>>('POST', `/knowledge-bases/${kbId}/articles`, data);
+		return this.request<SingleResponse<KbArticle>>(
+			'POST',
+			`/knowledge-bases/${kbId}/articles`,
+			data,
+		);
 	}
 
-	async getKbArticle(kbId: string, articleId: string, language?: string): Promise<SingleResponse<KbArticle>> {
+	async getKbArticle(
+		kbId: string,
+		articleId: string,
+		language?: string,
+	): Promise<SingleResponse<KbArticle>> {
 		const query = language ? `?language=${encodeURIComponent(language)}` : '';
-		return this.request<SingleResponse<KbArticle>>('GET', `/knowledge-bases/${kbId}/articles/${articleId}${query}`);
+		return this.request<SingleResponse<KbArticle>>(
+			'GET',
+			`/knowledge-bases/${kbId}/articles/${articleId}${query}`,
+		);
 	}
 
 	async updateKbArticle(
@@ -842,21 +913,31 @@ export class PylonClient {
 			is_unlisted?: boolean;
 		},
 	): Promise<SingleResponse<KbArticle>> {
-		return this.request<SingleResponse<KbArticle>>('PATCH', `/knowledge-bases/${kbId}/articles/${articleId}`, data);
+		return this.request<SingleResponse<KbArticle>>(
+			'PATCH',
+			`/knowledge-bases/${kbId}/articles/${articleId}`,
+			data,
+		);
 	}
 
-	async deleteKbArticle(kbId: string, articleId: string): Promise<{ request_id: string }> {
-		return this.request<{ request_id: string }>('DELETE', `/knowledge-bases/${kbId}/articles/${articleId}`);
+	async deleteKbArticle(
+		kbId: string,
+		articleId: string,
+	): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>(
+			'DELETE',
+			`/knowledge-bases/${kbId}/articles/${articleId}`,
+		);
 	}
 
 	async createKbRouteRedirect(
 		kbId: string,
 		data: { from_path: string; to_path: string },
-	): Promise<SingleResponse<{ id: string; from_path: string; to_path: string }>> {
-		return this.request<SingleResponse<{ id: string; from_path: string; to_path: string }>>(
-			'POST',
-			`/knowledge-bases/${kbId}/route-redirects`,
-			data,
-		);
+	): Promise<
+		SingleResponse<{ id: string; from_path: string; to_path: string }>
+	> {
+		return this.request<
+			SingleResponse<{ id: string; from_path: string; to_path: string }>
+		>('POST', `/knowledge-bases/${kbId}/route-redirects`, data);
 	}
 }
