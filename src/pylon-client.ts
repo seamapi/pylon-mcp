@@ -804,6 +804,41 @@ export class PylonClient {
 		return this.request<SingleResponse<Team>>('PATCH', `/teams/${id}`, data);
 	}
 
+	// Users
+	async listUsers(params?: PaginationParams): Promise<PaginatedResponse<User>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<User>>(
+			'GET',
+			`/users${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async getUser(id: string): Promise<SingleResponse<User>> {
+		return this.request<SingleResponse<User>>('GET', `/users/${id}`);
+	}
+
+	async updateUser(
+		id: string,
+		data: Partial<User>,
+	): Promise<SingleResponse<User>> {
+		return this.request<SingleResponse<User>>('PATCH', `/users/${id}`, data);
+	}
+
+	async searchUsers(
+		filter: object,
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<User>> {
+		const cleanedFilter = cleanFilter(filter as Record<string, unknown>);
+		return this.request<PaginatedResponse<User>>('POST', '/users/search', {
+			filter: cleanedFilter ?? {},
+			limit: params?.limit,
+			cursor: params?.cursor,
+		});
+	}
+
 	// Knowledge Bases
 	async listKnowledgeBases(
 		params?: PaginationParams,

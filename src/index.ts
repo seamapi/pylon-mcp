@@ -1707,6 +1707,120 @@ server.tool(
 );
 
 // ============================================================================
+// User Tools
+// ============================================================================
+
+server.tool(
+	'pylon_list_users',
+	'List all users (team members) in Pylon.',
+	{
+		limit: z
+			.number()
+			.min(1)
+			.max(MAX_LIST_LIMIT)
+			.optional()
+			.describe(
+				`Results limit (1-${MAX_LIST_LIMIT}, default ${DEFAULT_LIST_LIMIT})`,
+			),
+		cursor: z.string().optional().describe('Pagination cursor'),
+	},
+	async ({ limit, cursor }) => {
+		const result = await client.listUsers({
+			limit: limit ?? DEFAULT_LIST_LIMIT,
+			cursor,
+		});
+
+		const response = {
+			data: result.data,
+			...(result.pagination.has_next_page
+				? { next_cursor: result.pagination.cursor }
+				: {}),
+		};
+
+		return {
+			content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_get_user',
+	'Get a specific user by ID.',
+	{
+		id: z.string().describe('The user ID'),
+	},
+	async ({ id }) => {
+		const result = await client.getUser(id);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_search_users',
+	'Search users with filters.',
+	{
+		filter: z
+			.object({
+				id: z
+					.object({
+						equals: z.string().optional(),
+						in: z.array(z.string()).optional(),
+						not_in: z.array(z.string()).optional(),
+					})
+					.optional()
+					.describe('Filter by user ID'),
+				email: z
+					.object({
+						equals: z.string().optional(),
+						string_contains: z.string().optional(),
+						in: z.array(z.string()).optional(),
+						not_in: z.array(z.string()).optional(),
+					})
+					.optional()
+					.describe('Filter by email'),
+				name: z
+					.object({
+						equals: z.string().optional(),
+						string_contains: z.string().optional(),
+					})
+					.optional()
+					.describe('Filter by name'),
+			})
+			.describe(
+				'Filter object. Each field requires an operator like {email: {string_contains: "@example.com"}}',
+			),
+		limit: z
+			.number()
+			.min(1)
+			.max(MAX_LIST_LIMIT)
+			.optional()
+			.describe(
+				`Results limit (1-${MAX_LIST_LIMIT}, default ${DEFAULT_LIST_LIMIT})`,
+			),
+		cursor: z.string().optional().describe('Pagination cursor'),
+	},
+	async ({ filter, limit, cursor }) => {
+		const result = await client.searchUsers(filter, {
+			limit: limit ?? DEFAULT_LIST_LIMIT,
+			cursor,
+		});
+
+		const response = {
+			data: result.data,
+			...(result.pagination.has_next_page
+				? { next_cursor: result.pagination.cursor }
+				: {}),
+		};
+
+		return {
+			content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
+		};
+	},
+);
+
+// ============================================================================
 // Knowledge Bases
 // ============================================================================
 
