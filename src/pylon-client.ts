@@ -79,9 +79,11 @@ const VALID_OPERATORS: Record<string, Set<string>> = {
 		'time_is_before',
 		'time_range',
 	]),
+	updated_at: new Set(['time_is_after', 'time_is_before', 'time_range']),
 
-	// String search fields (body_html is NOT supported by Pylon API)
+	// String search fields
 	title: new Set(['string_contains', 'string_does_not_contain']),
+	body_html: new Set(['string_contains', 'string_does_not_contain']),
 
 	// ID fields
 	id: new Set(['equals', 'in', 'not_in']),
@@ -95,7 +97,7 @@ const VALID_OPERATORS: Record<string, Set<string>> = {
 
 	// Enum/state fields
 	state: new Set(['equals', 'in', 'not_in']),
-	issue_type: new Set(['equals', 'in', 'not_in']),
+	issue_type: new Set(['equals', 'in', 'not_in', 'is_set', 'is_unset']),
 
 	// Tag fields
 	tags: new Set(['contains', 'does_not_contain', 'in', 'not_in']),
