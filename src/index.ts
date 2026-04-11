@@ -1707,6 +1707,580 @@ server.tool(
 );
 
 // ============================================================================
+// Custom Fields
+// ============================================================================
+
+server.tool(
+	'pylon_list_custom_fields',
+	'List all custom field definitions in the organization.',
+	{
+		limit: z
+			.number()
+			.min(1)
+			.max(MAX_LIST_LIMIT)
+			.optional()
+			.describe(
+				`Results limit (1-${MAX_LIST_LIMIT}, default ${DEFAULT_LIST_LIMIT})`,
+			),
+		cursor: z.string().optional().describe('Pagination cursor'),
+	},
+	async ({ limit, cursor }) => {
+		const result = await client.listCustomFields({
+			limit: limit ?? DEFAULT_LIST_LIMIT,
+			cursor,
+		});
+		const response = {
+			data: result.data,
+			...(result.pagination.has_next_page
+				? { next_cursor: result.pagination.cursor }
+				: {}),
+		};
+		return {
+			content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_get_custom_field',
+	'Get a specific custom field definition by ID.',
+	{
+		id: z.string().describe('The custom field ID'),
+	},
+	async ({ id }) => {
+		const result = await client.getCustomField(id);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_create_custom_field',
+	'Create a new custom field definition.',
+	{
+		name: z.string().describe('Display name of the field'),
+		slug: z.string().describe('Unique slug identifier'),
+		field_type: z
+			.string()
+			.describe('Field type (e.g. "text", "number", "select", "multiselect")'),
+		object_type: z
+			.string()
+			.describe(
+				'Object type this field applies to (e.g. "issue", "account", "contact")',
+			),
+		options: z
+			.array(z.object({ slug: z.string(), label: z.string() }))
+			.optional()
+			.describe('Options for select/multiselect fields'),
+	},
+	async ({ name, slug, field_type, object_type, options }) => {
+		const result = await client.createCustomField({
+			name,
+			slug,
+			field_type,
+			object_type,
+			options,
+		});
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_update_custom_field',
+	'Update an existing custom field definition.',
+	{
+		id: z.string().describe('The custom field ID'),
+		name: z.string().optional().describe('New display name'),
+		options: z
+			.array(z.object({ slug: z.string(), label: z.string() }))
+			.optional()
+			.describe('Updated options for select/multiselect fields'),
+	},
+	async ({ id, name, options }) => {
+		const data: Record<string, unknown> = {};
+		if (name !== undefined) data["name"] = name;
+		if (options !== undefined) data["options"] = options;
+		const result = await client.updateCustomField(id, data);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+// ============================================================================
+// Account Activities
+// ============================================================================
+
+server.tool(
+	'pylon_create_account_activity',
+	'Create a new activity for an account (e.g. log a meeting, call, or custom event).',
+	{
+		account_id: z
+			.string()
+			.describe('The account ID (internal UUID or external ID)'),
+		slug: z.string().describe('Activity type slug (from activity types)'),
+		body_html: z
+			.string()
+			.optional()
+			.describe('Optional HTML content to display in the activity'),
+		contact_id: z.string().optional().describe('Contact ID of the actor'),
+		user_id: z.string().optional().describe('User ID of the actor'),
+		happened_at: z
+			.string()
+			.optional()
+			.describe('When the activity happened (RFC3339, defaults to now)'),
+		link: z.string().optional().describe('URL associated with the activity'),
+		link_text: z.string().optional().describe('Display text for the link'),
+	},
+	async ({ account_id, ...data }) => {
+		const result = await client.createAccountActivity(account_id, data);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_list_activity_types',
+	'List all custom activity type definitions for the organization.',
+	{},
+	async () => {
+		const result = await client.listActivityTypes();
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+// ============================================================================
+// Feature Requests
+// ============================================================================
+
+server.tool(
+	'pylon_search_feature_requests',
+	'Search feature requests with optional semantic search, status filtering, and account filtering.',
+	{
+		query: z
+			.string()
+			.optional()
+			.describe('Search query string for semantic and keyword matching'),
+		account_ids: z
+			.array(z.string())
+			.optional()
+			.describe('Filter by customer account IDs'),
+		request_statuses: z
+			.array(z.string())
+			.optional()
+			.describe(
+				'Filter by status (new, in_progress, closed, archived, or custom slugs)',
+			),
+		limit: z
+			.number()
+			.min(1)
+			.max(1000)
+			.optional()
+			.describe('Max results (default 100, max 1000)'),
+	},
+	async ({ query, account_ids, request_statuses, limit }) => {
+		const result = await client.searchFeatureRequests({
+			query,
+			account_ids,
+			request_statuses,
+			limit,
+		});
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_get_feature_request',
+	'Get a feature request by ID, optionally including evidence items.',
+	{
+		id: z.string().describe('The feature request ID'),
+		fetch_evidence: z
+			.boolean()
+			.optional()
+			.describe(
+				'Include evidence items (issues, calls, surveys linked to this request)',
+			),
+	},
+	async ({ id, fetch_evidence }) => {
+		const result = await client.getFeatureRequest(id, fetch_evidence);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_update_feature_request',
+	'Update a feature request (status, custom fields).',
+	{
+		id: z.string().describe('The feature request ID'),
+		request_status: z
+			.string()
+			.optional()
+			.describe(
+				'New status (new, in_progress, closed, archived, or custom slug)',
+			),
+		custom_fields: z
+			.array(
+				z.object({
+					slug: z.string(),
+					value: z.string().optional(),
+					values: z.array(z.string()).optional(),
+				}),
+			)
+			.optional()
+			.describe('Custom field values to update'),
+	},
+	async ({ id, request_status, custom_fields }) => {
+		const result = await client.updateFeatureRequest(id, {
+			request_status,
+			custom_fields,
+		});
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_delete_feature_request',
+	'Permanently delete a feature request and its associated evidence.',
+	{
+		id: z.string().describe('The feature request ID'),
+	},
+	async ({ id }) => {
+		const result = await client.deleteFeatureRequest(id);
+		return {
+			content: [
+				{
+					type: 'text',
+					text: `Feature request ${id} deleted. Request ID: ${result.request_id}`,
+				},
+			],
+		};
+	},
+);
+
+// ============================================================================
+// Tasks & Projects
+// ============================================================================
+
+server.tool(
+	'pylon_list_tasks',
+	'List all tasks in the organization.',
+	{
+		limit: z
+			.number()
+			.min(1)
+			.max(999)
+			.optional()
+			.describe('Results limit (1-999, default 100)'),
+		cursor: z.string().optional().describe('Pagination cursor'),
+	},
+	async ({ limit, cursor }) => {
+		const result = await client.listTasks({ limit: limit ?? 100, cursor });
+		const response = {
+			data: result.data,
+			...(result.pagination.has_next_page
+				? { next_cursor: result.pagination.cursor }
+				: {}),
+		};
+		return {
+			content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_get_task',
+	'Get a specific task by ID.',
+	{
+		id: z.string().describe('The task ID'),
+	},
+	async ({ id }) => {
+		const result = await client.getTask(id);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_search_tasks',
+	'Search tasks with filters.',
+	{
+		filter: z
+			.object({
+				field: z.string().describe('Field to filter on'),
+				operator: z
+					.string()
+					.describe(
+						'Operator (equals, in, not_in, is_set, is_unset, time_is_after, time_is_before, time_range)',
+					),
+				value: z
+					.string()
+					.optional()
+					.describe('Value for single-value operators'),
+				values: z
+					.array(z.string())
+					.optional()
+					.describe('Values for multi-value operators'),
+				subfilters: z
+					.array(z.any())
+					.optional()
+					.describe('Nested subfilters for compound queries'),
+			})
+			.describe(
+				'Filter object. Fields: account_id, project_id, status, assignee_id, milestone_id, created_at, due_date, updated_at',
+			),
+		limit: z
+			.number()
+			.min(1)
+			.max(999)
+			.optional()
+			.describe('Results limit (1-999, default 100)'),
+		cursor: z.string().optional().describe('Pagination cursor'),
+	},
+	async ({ filter, limit, cursor }) => {
+		const result = await client.searchTasks(filter, {
+			limit: limit ?? 100,
+			cursor,
+		});
+		const response = {
+			data: result.data,
+			...(result.pagination.has_next_page
+				? { next_cursor: result.pagination.cursor }
+				: {}),
+		};
+		return {
+			content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_create_task',
+	'Create a new task.',
+	{
+		title: z.string().describe('Task title'),
+		account_id: z.string().optional().describe('Account ID'),
+		project_id: z.string().optional().describe('Project ID'),
+		assignee_id: z.string().optional().describe('Assignee user or contact ID'),
+		milestone_id: z.string().optional().describe('Milestone ID'),
+		status: z
+			.enum(['not_started', 'in_progress', 'completed'])
+			.optional()
+			.describe('Task status'),
+		due_date: z.string().optional().describe('Due date (RFC3339)'),
+		body_html: z.string().optional().describe('HTML description'),
+		customer_portal_visible: z
+			.boolean()
+			.optional()
+			.describe('Visible in customer portal'),
+		custom_fields: z
+			.array(
+				z.object({
+					slug: z.string(),
+					value: z.string().optional(),
+					values: z.array(z.string()).optional(),
+				}),
+			)
+			.optional()
+			.describe('Custom field values'),
+	},
+	async (params) => {
+		const result = await client.createTask(params);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_update_task',
+	'Update an existing task.',
+	{
+		id: z.string().describe('The task ID'),
+		title: z.string().optional().describe('New title'),
+		project_id: z.string().optional().describe('Project ID'),
+		assignee_id: z.string().optional().describe('Assignee ID'),
+		milestone_id: z.string().optional().describe('Milestone ID'),
+		status: z
+			.enum(['not_started', 'in_progress', 'completed'])
+			.optional()
+			.describe('Task status'),
+		due_date: z.string().optional().describe('Due date (RFC3339)'),
+		body_html: z.string().optional().describe('HTML description'),
+		customer_portal_visible: z
+			.boolean()
+			.optional()
+			.describe('Visible in customer portal'),
+		custom_fields: z
+			.array(
+				z.object({
+					slug: z.string(),
+					value: z.string().optional(),
+					values: z.array(z.string()).optional(),
+				}),
+			)
+			.optional()
+			.describe('Custom field values'),
+	},
+	async ({ id, ...data }) => {
+		const result = await client.updateTask(id, data);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_delete_task',
+	'Permanently delete a task.',
+	{
+		id: z.string().describe('The task ID'),
+	},
+	async ({ id }) => {
+		const result = await client.deleteTask(id);
+		return {
+			content: [
+				{
+					type: 'text',
+					text: `Task ${id} deleted. Request ID: ${result.request_id}`,
+				},
+			],
+		};
+	},
+);
+
+server.tool(
+	'pylon_create_project',
+	'Create a new project for an account.',
+	{
+		account_id: z.string().describe('Account ID'),
+		name: z.string().describe('Project name'),
+		owner_id: z.string().optional().describe('Owner user ID'),
+		project_template_id: z.string().optional().describe('Project template ID'),
+		description_html: z.string().optional().describe('HTML description'),
+		start_date: z.string().optional().describe('Start date (RFC3339)'),
+		end_date: z.string().optional().describe('End date (RFC3339)'),
+		customer_portal_visible: z
+			.boolean()
+			.optional()
+			.describe('Visible in customer portal'),
+	},
+	async (params) => {
+		const result = await client.createProject(params);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_update_project',
+	'Update an existing project.',
+	{
+		id: z.string().describe('The project ID'),
+		name: z.string().optional().describe('Project name'),
+		owner_id: z.string().optional().describe('Owner user ID'),
+		description_html: z.string().optional().describe('HTML description'),
+		start_date: z.string().optional().describe('Start date (RFC3339)'),
+		end_date: z.string().optional().describe('End date (RFC3339)'),
+		customer_portal_visible: z
+			.boolean()
+			.optional()
+			.describe('Visible in customer portal'),
+		is_archived: z.boolean().optional().describe('Archive the project'),
+	},
+	async ({ id, ...data }) => {
+		const result = await client.updateProject(id, data);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_delete_project',
+	'Permanently delete a project.',
+	{
+		id: z.string().describe('The project ID'),
+	},
+	async ({ id }) => {
+		const result = await client.deleteProject(id);
+		return {
+			content: [
+				{
+					type: 'text',
+					text: `Project ${id} deleted. Request ID: ${result.request_id}`,
+				},
+			],
+		};
+	},
+);
+
+server.tool(
+	'pylon_create_milestone',
+	'Create a new milestone within a project.',
+	{
+		name: z.string().describe('Milestone name'),
+		project_id: z.string().describe('Project ID'),
+		account_id: z.string().optional().describe('Account ID'),
+		due_date: z.string().optional().describe('Due date (RFC3339)'),
+	},
+	async (params) => {
+		const result = await client.createMilestone(params);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_update_milestone',
+	'Update an existing milestone.',
+	{
+		id: z.string().describe('The milestone ID'),
+		name: z.string().optional().describe('Milestone name'),
+		due_date: z.string().optional().describe('Due date (RFC3339)'),
+	},
+	async ({ id, ...data }) => {
+		const result = await client.updateMilestone(id, data);
+		return {
+			content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+		};
+	},
+);
+
+server.tool(
+	'pylon_delete_milestone',
+	'Permanently delete a milestone.',
+	{
+		id: z.string().describe('The milestone ID'),
+	},
+	async ({ id }) => {
+		const result = await client.deleteMilestone(id);
+		return {
+			content: [
+				{
+					type: 'text',
+					text: `Milestone ${id} deleted. Request ID: ${result.request_id}`,
+				},
+			],
+		};
+	},
+);
+
+// ============================================================================
 // Knowledge Bases
 // ============================================================================
 
