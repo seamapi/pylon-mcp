@@ -354,6 +354,97 @@ export interface User {
 	name?: string;
 }
 
+export interface CustomField {
+	id: string;
+	slug: string;
+	name?: string;
+	field_type?: string;
+	object_type?: string;
+	options?: { slug: string; label: string }[];
+}
+
+export interface ActivityType {
+	id: string;
+	slug: string;
+	label: string;
+	icon_url?: string;
+}
+
+export interface FeatureRequest {
+	id: string;
+	title: string;
+	description?: string;
+	request_status?: string;
+	account_ids?: string[];
+	evidence_count?: number;
+	custom_fields?: Record<string, unknown>;
+	evidence?: {
+		source_type: string;
+		source_id?: string;
+		account_id?: string;
+		external_url?: string;
+		summary?: string;
+	}[];
+	created_at?: string;
+	updated_at?: string;
+}
+
+export interface PylonTask {
+	id: string;
+	title: string;
+	body_html?: string;
+	status?: string;
+	due_date?: string;
+	created_at?: string;
+	updated_at?: string;
+	customer_portal_visible?: boolean;
+	parent_task_id?: string;
+	subtask_ids?: string[];
+	account?: {
+		id: string;
+		external_ids?: { external_id: string; label?: string }[];
+	};
+	project?: { id: string };
+	assignee?: {
+		user?: { id: string; email: string };
+		contact?: { id: string; email: string };
+	};
+	milestone?: { id: string };
+	custom_fields?: Record<string, unknown>;
+}
+
+export interface Project {
+	id: string;
+	name: string;
+	description_html?: string;
+	owner_id?: string;
+	start_date?: string;
+	end_date?: string;
+	customer_portal_visible?: boolean;
+	is_archived?: boolean;
+	archived_at?: string;
+	created_at?: string;
+	updated_at?: string;
+	account?: {
+		id: string;
+		external_ids?: { external_id: string; label?: string }[];
+	};
+	project_template?: { id: string };
+}
+
+export interface Milestone {
+	id: string;
+	name: string;
+	due_date?: string;
+	created_at?: string;
+	updated_at?: string;
+	account?: {
+		id: string;
+		external_ids?: { external_id: string; label?: string }[];
+	};
+	project?: { id: string };
+}
+
 export interface KnowledgeBase {
 	id: string;
 	title: string;
@@ -874,6 +965,256 @@ export class PylonClient {
 		data: { name?: string; user_ids?: string[] },
 	): Promise<SingleResponse<Team>> {
 		return this.request<SingleResponse<Team>>('PATCH', `/teams/${id}`, data);
+	}
+
+	// Custom Fields
+	async listCustomFields(
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<CustomField>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<CustomField>>(
+			'GET',
+			`/custom-fields${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async getCustomField(id: string): Promise<SingleResponse<CustomField>> {
+		return this.request<SingleResponse<CustomField>>(
+			'GET',
+			`/custom-fields/${id}`,
+		);
+	}
+
+	async createCustomField(data: {
+		name: string;
+		slug: string;
+		field_type: string;
+		object_type: string;
+		options?: { slug: string; label: string }[];
+	}): Promise<SingleResponse<CustomField>> {
+		return this.request<SingleResponse<CustomField>>(
+			'POST',
+			'/custom-fields',
+			data,
+		);
+	}
+
+	async updateCustomField(
+		id: string,
+		data: Partial<{ name: string; options: { slug: string; label: string }[] }>,
+	): Promise<SingleResponse<CustomField>> {
+		return this.request<SingleResponse<CustomField>>(
+			'PATCH',
+			`/custom-fields/${id}`,
+			data,
+		);
+	}
+
+	// Account Activities
+	async createAccountActivity(
+		accountId: string,
+		data: {
+			slug: string;
+			body_html?: string;
+			contact_id?: string;
+			user_id?: string;
+			happened_at?: string;
+			link?: string;
+			link_text?: string;
+		},
+	): Promise<SingleResponse<{ success: boolean }>> {
+		return this.request<SingleResponse<{ success: boolean }>>(
+			'POST',
+			`/accounts/${accountId}/activities`,
+			data,
+		);
+	}
+
+	async listActivityTypes(): Promise<PaginatedResponse<ActivityType>> {
+		return this.request<PaginatedResponse<ActivityType>>(
+			'GET',
+			'/activity-types',
+		);
+	}
+
+	// Feature Requests
+	async searchFeatureRequests(data: {
+		query?: string;
+		account_ids?: string[];
+		request_statuses?: string[];
+		limit?: number;
+	}): Promise<{ data: FeatureRequest[]; request_id: string }> {
+		return this.request<{ data: FeatureRequest[]; request_id: string }>(
+			'POST',
+			'/feature-requests/search',
+			data,
+		);
+	}
+
+	async getFeatureRequest(
+		id: string,
+		fetchEvidence?: boolean,
+	): Promise<SingleResponse<FeatureRequest>> {
+		const query = fetchEvidence ? '?fetch_evidence=true' : '';
+		return this.request<SingleResponse<FeatureRequest>>(
+			'GET',
+			`/feature-requests/${id}${query}`,
+		);
+	}
+
+	async updateFeatureRequest(
+		id: string,
+		data: {
+			request_status?: string;
+			custom_fields?: { slug: string; value?: string; values?: string[] }[];
+		},
+	): Promise<SingleResponse<FeatureRequest>> {
+		return this.request<SingleResponse<FeatureRequest>>(
+			'PATCH',
+			`/feature-requests/${id}`,
+			data,
+		);
+	}
+
+	async deleteFeatureRequest(id: string): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>(
+			'DELETE',
+			`/feature-requests/${id}`,
+		);
+	}
+
+	// Tasks
+	async listTasks(
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<PylonTask>> {
+		const searchParams = new URLSearchParams();
+		if (params?.limit) searchParams.set('limit', params.limit.toString());
+		if (params?.cursor) searchParams.set('cursor', params.cursor);
+		const query = searchParams.toString();
+		return this.request<PaginatedResponse<PylonTask>>(
+			'GET',
+			`/tasks${query ? `?${query}` : ''}`,
+		);
+	}
+
+	async getTask(id: string): Promise<SingleResponse<PylonTask>> {
+		return this.request<SingleResponse<PylonTask>>('GET', `/tasks/${id}`);
+	}
+
+	async searchTasks(
+		filter: object,
+		params?: PaginationParams,
+	): Promise<PaginatedResponse<PylonTask>> {
+		return this.request<PaginatedResponse<PylonTask>>('POST', '/tasks/search', {
+			filter,
+			limit: params?.limit,
+			cursor: params?.cursor,
+		});
+	}
+
+	async createTask(data: {
+		title: string;
+		account_id?: string;
+		project_id?: string;
+		assignee_id?: string;
+		milestone_id?: string;
+		status?: 'not_started' | 'in_progress' | 'completed';
+		due_date?: string;
+		body_html?: string;
+		customer_portal_visible?: boolean;
+		custom_fields?: { slug: string; value?: string; values?: string[] }[];
+	}): Promise<SingleResponse<PylonTask>> {
+		return this.request<SingleResponse<PylonTask>>('POST', '/tasks', data);
+	}
+
+	async updateTask(
+		id: string,
+		data: {
+			title?: string;
+			project_id?: string;
+			assignee_id?: string;
+			milestone_id?: string;
+			status?: 'not_started' | 'in_progress' | 'completed';
+			due_date?: string;
+			body_html?: string;
+			customer_portal_visible?: boolean;
+			custom_fields?: { slug: string; value?: string; values?: string[] }[];
+		},
+	): Promise<SingleResponse<PylonTask>> {
+		return this.request<SingleResponse<PylonTask>>(
+			'PATCH',
+			`/tasks/${id}`,
+			data,
+		);
+	}
+
+	async deleteTask(id: string): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>('DELETE', `/tasks/${id}`);
+	}
+
+	// Projects
+	async createProject(data: {
+		account_id: string;
+		name: string;
+		owner_id?: string;
+		project_template_id?: string;
+		description_html?: string;
+		start_date?: string;
+		end_date?: string;
+		customer_portal_visible?: boolean;
+	}): Promise<SingleResponse<Project>> {
+		return this.request<SingleResponse<Project>>('POST', '/projects', data);
+	}
+
+	async updateProject(
+		id: string,
+		data: {
+			name?: string;
+			owner_id?: string;
+			description_html?: string;
+			start_date?: string;
+			end_date?: string;
+			customer_portal_visible?: boolean;
+			is_archived?: boolean;
+		},
+	): Promise<SingleResponse<Project>> {
+		return this.request<SingleResponse<Project>>(
+			'PATCH',
+			`/projects/${id}`,
+			data,
+		);
+	}
+
+	async deleteProject(id: string): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>('DELETE', `/projects/${id}`);
+	}
+
+	// Milestones
+	async createMilestone(data: {
+		name: string;
+		project_id: string;
+		account_id?: string;
+		due_date?: string;
+	}): Promise<SingleResponse<Milestone>> {
+		return this.request<SingleResponse<Milestone>>('POST', '/milestones', data);
+	}
+
+	async updateMilestone(
+		id: string,
+		data: { name?: string; due_date?: string },
+	): Promise<SingleResponse<Milestone>> {
+		return this.request<SingleResponse<Milestone>>(
+			'PATCH',
+			`/milestones/${id}`,
+			data,
+		);
+	}
+
+	async deleteMilestone(id: string): Promise<{ request_id: string }> {
+		return this.request<{ request_id: string }>('DELETE', `/milestones/${id}`);
 	}
 
 	// Knowledge Bases
