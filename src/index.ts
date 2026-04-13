@@ -1070,6 +1070,23 @@ server.tool(
 					})
 					.optional()
 					.describe('Filter by team ID'),
+				body_html: z
+					.object({
+						string_contains: z.string().optional(),
+						string_does_not_contain: z.string().optional(),
+					})
+					.optional()
+					.describe('Filter by body content'),
+				updated_at: z
+					.object({
+						time_is_after: z.string().optional(),
+						time_is_before: z.string().optional(),
+						time_range: z
+							.object({ start: z.string(), end: z.string() })
+							.optional(),
+					})
+					.optional()
+					.describe('Filter by update time (RFC3339 format)'),
 				resolved_at: z
 					.object({
 						time_is_after: z.string().optional(),
@@ -1121,6 +1138,8 @@ server.tool(
 						equals: z.string().optional(),
 						in: z.array(z.string()).optional(),
 						not_in: z.array(z.string()).optional(),
+						is_set: z.boolean().optional(),
+						is_unset: z.boolean().optional(),
 					})
 					.optional()
 					.describe('Filter by issue type: Conversation or Ticket'),
