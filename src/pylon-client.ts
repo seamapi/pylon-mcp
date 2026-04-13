@@ -138,12 +138,7 @@ function cleanFilter(
 						opValue !== undefined &&
 						opValue !== null
 					) {
-						// For time_range, recursively clean but keep structure
-						if (op === 'time_range' && typeof opValue === 'object') {
-							cleanedOperators[op] = opValue;
-						} else {
-							cleanedOperators[op] = opValue;
-						}
+						cleanedOperators[op] = opValue;
 					}
 					// Silently drop invalid operators to avoid API errors
 				}
@@ -163,6 +158,78 @@ function cleanFilter(
 	}
 
 	return Object.keys(result).length > 0 ? result : undefined;
+}
+
+// Operators that use `values` (array) instead of `value`
+const ARRAY_OPERATORS = new Set(['in', 'not_in']);
+// Operators that take no value
+const VALUELESS_OPERATORS = new Set(['is_set', 'is_unset']);
+
+/**
+ * Converts the MCP nested filter format into the Pylon API's
+ * field/operator/value/subfilters format.
+ *
+ * MCP input:  { tags: { contains: "bug" }, state: { equals: "new" } }
+ * Pylon output: {
+ *   operator: "and",
+ *   subfilters: [
+ *     { field: "tags", operator: "contains", value: "bug" },
+ *     { field: "state", operator: "equals", value: "new" }
+ *   ]
+ * }
+ */
+function toApiFilter(
+	cleaned: Record<string, unknown>,
+): Record<string, unknown> {
+	const conditions: Record<string, unknown>[] = [];
+
+	for (const [fieldName, fieldValue] of Object.entries(cleaned)) {
+		if (
+			typeof fieldValue !== 'object' ||
+			fieldValue === null ||
+			Array.isArray(fieldValue)
+		) {
+			continue;
+		}
+
+		const operators = fieldValue as Record<string, unknown>;
+
+		for (const [op, opValue] of Object.entries(operators)) {
+			if (op === 'time_range' && typeof opValue === 'object') {
+				const range = opValue as { start?: string; end?: string };
+				conditions.push({
+					field: fieldName,
+					operator: op,
+					value: range,
+				});
+			} else if (ARRAY_OPERATORS.has(op)) {
+				conditions.push({
+					field: fieldName,
+					operator: op,
+					values: opValue,
+				});
+			} else if (VALUELESS_OPERATORS.has(op)) {
+				conditions.push({
+					field: fieldName,
+					operator: op,
+				});
+			} else {
+				conditions.push({
+					field: fieldName,
+					operator: op,
+					value: opValue,
+				});
+			}
+		}
+	}
+
+	if (conditions.length === 0) {
+		return {};
+	}
+	if (conditions.length === 1) {
+		return conditions[0] as Record<string, unknown>;
+	}
+	return { operator: 'and', subfilters: conditions };
 }
 
 export interface PylonConfig {
@@ -416,11 +483,12 @@ export class PylonClient {
 		params?: PaginationParams,
 	): Promise<PaginatedResponse<Account>> {
 		const cleanedFilter = cleanFilter(filter as Record<string, unknown>);
+		const apiFilter = cleanedFilter ? toApiFilter(cleanedFilter) : {};
 		return this.request<PaginatedResponse<Account>>(
 			'POST',
 			'/accounts/search',
 			{
-				filter: cleanedFilter ?? {},
+				filter: apiFilter,
 				limit: params?.limit,
 				cursor: params?.cursor,
 			},
@@ -476,11 +544,12 @@ export class PylonClient {
 		params?: PaginationParams,
 	): Promise<PaginatedResponse<Contact>> {
 		const cleanedFilter = cleanFilter(filter as Record<string, unknown>);
+		const apiFilter = cleanedFilter ? toApiFilter(cleanedFilter) : {};
 		return this.request<PaginatedResponse<Contact>>(
 			'POST',
 			'/contacts/search',
 			{
-				filter: cleanedFilter ?? {},
+				filter: apiFilter,
 				limit: params?.limit,
 				cursor: params?.cursor,
 			},
@@ -559,6 +628,7 @@ export class PylonClient {
 		const filterRecord = filter as Record<string, unknown>;
 		validateFilterTimeRanges(filterRecord);
 		const cleanedFilter = cleanFilter(filterRecord);
+		const apiFilter = cleanedFilter ? toApiFilter(cleanedFilter) : {};
 
 		// Debug: log filters to stderr (shows in Claude Desktop logs)
 		console.error(
@@ -566,12 +636,12 @@ export class PylonClient {
 			JSON.stringify(filterRecord),
 		);
 		console.error(
-			'[pylon-mcp] searchIssues cleaned:',
-			JSON.stringify(cleanedFilter ?? {}),
+			'[pylon-mcp] searchIssues apiFilter:',
+			JSON.stringify(apiFilter),
 		);
 
 		return this.request<PaginatedResponse<Issue>>('POST', '/issues/search', {
-			filter: cleanedFilter ?? {},
+			filter: apiFilter,
 			limit: params?.limit,
 			cursor: params?.cursor,
 		});
