@@ -67,6 +67,60 @@ Add to your Claude Code MCP settings:
 }
 ```
 
+### With Claude Managed Agents
+
+The server supports Streamable HTTP transport for use with [Claude Managed Agents](https://docs.anthropic.com/en/docs/agents-and-tools/managed-agents). This lets a managed agent connect to the server over HTTP instead of stdio.
+
+#### 1. Start the server in HTTP mode
+
+```bash
+MCP_TRANSPORT=http PORT=3000 PYLON_API_TOKEN=your_token node dist/index.js
+```
+
+Or using the convenience script:
+
+```bash
+PYLON_API_TOKEN=your_token pnpm start:http
+```
+
+The server listens on `http://localhost:3000/mcp` by default. A `/health` endpoint is also available for monitoring. Deploy this to a host reachable by Anthropic's infrastructure (e.g. Fly, Railway, your cloud provider).
+
+#### 2. Configure the managed agent
+
+When creating your agent, declare the MCP server and include `mcp_toolset` in tools:
+
+```python
+agent = client.beta.agents.create(
+    name="Pylon Support Agent",
+    model="claude-opus-4-7",
+    system="You are a customer support agent with access to Pylon.",
+    mcp_servers=[
+        {"type": "url", "name": "pylon", "url": "https://your-host/mcp"}
+    ],
+    tools=[
+        {"type": "agent_toolset_20260401"},
+        {"type": "mcp_toolset", "mcp_server_name": "pylon"},
+    ],
+)
+```
+
+#### 3. Start a session
+
+```python
+session = client.beta.sessions.create(
+    agent=agent.id,
+    environment_id=environment.id,
+)
+```
+
+#### Environment variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `PYLON_API_TOKEN` | Pylon API token (required) | — |
+| `MCP_TRANSPORT` | Transport mode: `stdio` or `http` | `stdio` |
+| `PORT` | HTTP server port (only used when `MCP_TRANSPORT=http`) | `3000` |
+
 ## Available Tools
 
 ### Organization

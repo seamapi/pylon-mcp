@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import { createServer } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { PylonClient } from './pylon-client.js';
 import {
@@ -2535,12 +2537,41 @@ server.tool(
 // Server startup
 // ============================================================================
 
-async function main() {
+async function startStdio() {
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
 }
 
-main().catch((error) => {
+async function startHttp() {
+	const port = Number(process.env['PORT']) || 3000;
+
+	const transport = new StreamableHTTPServerTransport({
+		sessionIdGenerator: () => crypto.randomUUID(),
+	});
+	await server.connect(transport);
+
+	const httpServer = createServer((req, res) => {
+		const url = new URL(req.url ?? '/', `http://${req.headers['host']}`);
+		if (url.pathname === '/mcp') {
+			transport.handleRequest(req, res);
+		} else if (url.pathname === '/health') {
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ status: 'ok' }));
+		} else {
+			res.writeHead(404);
+			res.end('Not found');
+		}
+	});
+
+	httpServer.listen(port, () => {
+		console.error(`Pylon MCP server listening on http://localhost:${port}/mcp`);
+	});
+}
+
+const transportMode = process.env['MCP_TRANSPORT'] ?? 'stdio';
+const start = transportMode === 'http' ? startHttp : startStdio;
+
+start().catch((error) => {
 	console.error('Server error:', error);
 	process.exit(1);
 });
