@@ -137,11 +137,13 @@ export type IssueFull = z.infer<typeof IssueFullSchema>;
 // Account Schemas
 // ============================================================================
 
-export const CustomFieldValueSchema = z.object({
-	slug: z.string(),
-	value: z.unknown().nullable().optional(),
-	values: z.array(z.unknown()).nullable().optional(),
-});
+export const CustomFieldValueSchema = z
+	.object({
+		slug: z.string().optional(),
+		value: z.unknown().nullable().optional(),
+		values: z.array(z.unknown()).nullable().optional(),
+	})
+	.passthrough();
 
 const ChannelSchema = z.object({
 	channel_id: z.string(),
@@ -480,16 +482,38 @@ export function toIssueFull(raw: Record<string, unknown>): IssueFull {
 
 /**
  * Transform raw account response to typed format.
+ * Uses safeParse so a single malformed account (e.g. unexpected custom field
+ * shape from HubSpot) doesn't break the entire list.
  */
 export function toAccount(raw: Record<string, unknown>): Account {
-	return AccountSchema.strip().parse(raw);
+	const result = AccountSchema.strip().safeParse(raw);
+	if (result.success) {
+		return result.data;
+	}
+	return {
+		id: raw['id'] as string,
+		name: (raw['name'] as string) ?? 'unknown',
+		...(raw['domains'] != null ? { domains: raw['domains'] as string[] } : {}),
+		...(raw['primary_domain'] != null
+			? { primary_domain: raw['primary_domain'] as string }
+			: {}),
+		...(raw['tags'] != null ? { tags: raw['tags'] as string[] } : {}),
+	};
 }
 
 /**
  * Transform raw contact response to typed format.
  */
 export function toContact(raw: Record<string, unknown>): Contact {
-	return ContactSchema.strip().parse(raw);
+	const result = ContactSchema.strip().safeParse(raw);
+	if (result.success) {
+		return result.data;
+	}
+	return {
+		id: raw['id'] as string,
+		name: (raw['name'] as string) ?? 'unknown',
+		...(raw['email'] != null ? { email: raw['email'] as string } : {}),
+	};
 }
 
 /**
